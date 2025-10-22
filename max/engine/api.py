@@ -425,7 +425,7 @@ class InferenceSession:
                         )
             print("getting compilation lock")
             with self._compilation_lock:
-                print("compiling from object")
+                print("compiling from object", model._module, model._module._CAPIPtr, self._impl, )
                 _model = self._impl.compile_from_object(
                     model._module._CAPIPtr,
                     options_dict,

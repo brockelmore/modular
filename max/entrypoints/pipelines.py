@@ -258,6 +258,7 @@ def cli_serve(
             parse_task_flags(task_arg), **config_kwargs
         )
     else:
+        print(config_kwargs)
         pipeline_config = PipelineConfig(**config_kwargs)
 
     # Log Pipeline and Sampling Configuration
