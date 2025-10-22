@@ -398,7 +398,7 @@ class InferenceSession:
             _model = self._impl.compile_from_path(model, options_dict)
             print("done compiling from path")
         elif _is_max_graph(model):
-            print("is max graph")
+            print("is max graph", model)
             options_dict["pipeline_name"] = model.name
             # TODO: if the model has been loaded from a serialized MLIR file, we don't have
             # the _weights attribute available to us
