@@ -399,7 +399,7 @@ class LlamaModelBase(PipelineModel[TextContext], KVCacheMixin):
             np.arange(self.pipeline_config.max_batch_size + 1, dtype=np.uint32)
         ).to(self.devices[0])
 
-        logger.info("Building and compiling model...")
+        logger.info("Building and compiling model... HERE")
         before = time.perf_counter()
         graph = self._build_graph(self.weights, self.adapter)
         after_build = time.perf_counter()
