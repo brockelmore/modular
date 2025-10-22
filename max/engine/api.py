@@ -368,6 +368,9 @@ class InferenceSession:
             weights_registry or {}
         )
 
+        self.set_mojo_log_level(LogLevel("trace"))
+
+        print("processing custom extensions")
         if custom_extensions is not None:
             options_dict["custom_extensions"] = (
                 _process_custom_extensions_objects(custom_extensions)
@@ -385,17 +388,23 @@ class InferenceSession:
                 _process_custom_extensions_objects(model.kernel_libraries_paths)  # type: ignore
             )
 
+        print("done processing custom extensions")
+
         if isinstance(model, str | bytes):
             model = Path(str(model))
 
         if isinstance(model, Path):
+            print("compiling from path")
             _model = self._impl.compile_from_path(model, options_dict)
+            print("done compiling from path")
         elif _is_max_graph(model):
+            print("is max graph")
             options_dict["pipeline_name"] = model.name
-
             # TODO: if the model has been loaded from a serialized MLIR file, we don't have
             # the _weights attribute available to us
+
             if hasattr(model, "_weights"):
+                print("iterating through weights")
                 for weight_name, weight in model._weights.items():
                     if weight_name not in weights_registry_real:
                         raise ValueError(
@@ -414,24 +423,31 @@ class InferenceSession:
                         raise ValueError(
                             f"Mismatch in device type for weight '{weight_name}'. Expected {expected_device} but weight is {registered_weight}"
                         )
-
+            print("getting compilation lock")
             with self._compilation_lock:
+                print("compiling from object")
                 _model = self._impl.compile_from_object(
                     model._module._CAPIPtr,
                     options_dict,
                 )
+                print("done compiling from object")
         else:
             raise RuntimeError("The model is not a valid path or module.")
 
+        print("items for weights_registry_real")
         for weight_name, weight in weights_registry_real.items():
             try:
+                print("raise_if_not_contiguous")
                 _raise_if_not_contiguous(weight)
+                print("done raise_if_not_contiguous")
             except ValueError as e:
                 raise ValueError(
                     f"Weight '{weight_name}' is not contiguous: {str(e)}"
                 ) from e
 
+        print("model _load")
         _model._load(weights_registry_real)
+        print("done model _load")
         return _model
 
     def set_debug_print_options(
