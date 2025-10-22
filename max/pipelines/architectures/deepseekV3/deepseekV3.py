@@ -48,10 +48,7 @@ from max.nn.attention.multi_latent_attention_fp8 import (
 )
 from max.nn.comm.allreduce import Allreduce
 from max.nn.data_parallelism import split_batch_replicated
-from max.nn.kv_cache import (
-    PagedCacheValues,
-    TPPagedKVCacheManager,
-)
+from max.nn.kv_cache import PagedCacheValues, PagedKVCacheManager
 from max.nn.moe import MoE, MoEFp8
 from max.nn.rotary_embedding import (
     DeepseekYarnRopeScalingParams,
@@ -330,7 +327,6 @@ class DeepseekV3(Module):
             theta=config.rope_theta,
             max_seq_len=config.max_position_embeddings,
             scaling_params=scaling_params,
-            device=config.devices[0],
         )
 
         self.layers = LayerList(
@@ -545,7 +541,7 @@ class DeepseekV3(Module):
             return (last_logits,)
 
     def input_types(
-        self, kv_manager: TPPagedKVCacheManager
+        self, kv_manager: PagedKVCacheManager
     ) -> tuple[TensorType | BufferType, ...]:
         # TODO: Move input symbol computation from the manager classes.
         # It should be possible to compute the input symbols from the model

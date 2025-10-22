@@ -169,7 +169,7 @@ fn load_AB[
         address_space = AddressSpace.SHARED,
         alignment=128,
     ],
-    load_mma_pipeline: ProducerConsumerPipeline[num_pipeline_stages],
+    load_mma_pipeline: ProducerConsumerPipeline[Int(num_pipeline_stages)],
     peer_cta_coord: Tuple[UInt, UInt, UInt],
     work_tile_coord: Tuple[UInt, UInt],
     a_multicast_mask: UInt16,
@@ -345,7 +345,9 @@ fn stsm_helper[
     ]
     var stsm_lane_offset: UInt32 = (lane & 15) * UInt(stride0) + (
         lane >> 4
-    ) * 8 if not transpose_c else RLayout32Bits[trans_st_matrix_layout]()(lane)
+    ) * 8 if not transpose_c else RLayout32Bits[trans_st_matrix_layout]()(
+        Int(lane)
+    )
 
     # Helper function to slice a range of SIMD vector.
     # LLVM extract intrinsic generates bad code on GPU.
@@ -421,7 +423,7 @@ fn shared_memory_epilogue[
 
     alias distribute_layout = Layout.row_major(distribute_rows, distribute_cols)
     var c_smem_upper_frag = c_smem_warp_tile_upper.vectorize[
-        1, simd_size
+        1, Int(simd_size)
     ]().distribute[distribute_layout, swizzle=swizzle](lane_id())
 
     var c_smem_lower_frag = c_smem_warp_tile_lower.vectorize[
@@ -924,16 +926,19 @@ fn multi_stage_store_C[
             # into two stageNx64 row-major tiles due to the limitation of 128B TMA
             # swizzle. However, for easier programming, we reshape the tile
             # contiguous row_major(stageN, 16) chunks.
+            var tile_idx = Int(warp_id) if not is_lower_frag_required else Int(
+                2 * warp_id
+            )
             var c_smem_warp_tile_upper = c_smem_tile.tile[
                 stageN * 16 // stage_contiguous_size, stage_contiguous_size
-            ](2 * warp_id, 0).reshape[Layout.row_major(stageN, 16)]()
+            ](tile_idx, 0).reshape[Layout.row_major(stageN, 16)]()
             stsm_helper[swizzle, transpose_c](
                 upper_frag_casted, c_smem_warp_tile_upper
             )
 
             var c_smem_warp_tile_lower = c_smem_tile.tile[
                 stageN * 16 // stage_contiguous_size, stage_contiguous_size
-            ](2 * warp_id + 1, 0).reshape[Layout.row_major(stageN, 16)]()
+            ](tile_idx + 1, 0).reshape[Layout.row_major(stageN, 16)]()
 
             @parameter
             if is_lower_frag_required:
@@ -1059,9 +1064,10 @@ fn multi_stage_store_C[
 
             @parameter
             if transpose_c:
+                alias num_c_smem_tiles = 4 if not is_lower_frag_required else 8
 
                 @parameter
-                for i in range(8):
+                for i in range(num_c_smem_tiles):
                     var c_smem_warp_tile = c_smem_tile.tile[
                         stageN * 16 // stage_contiguous_size,
                         stage_contiguous_size,
@@ -1732,10 +1738,6 @@ fn _blackwell_matmul_tma_umma_warp_specialized[
             "MMA_N must be a multiple of 16",
         ]()
         constrained[
-            not config.AB_swapped,
-            "swapAB is not supported for cta_group == 1",
-        ]()
-        constrained[
             register_based_epilogue or elementwise_compute_lambda_fn is None,
             "only register-based epilogue is supported for cta_group == 1",
         ]()
@@ -1771,9 +1773,14 @@ fn _blackwell_matmul_tma_umma_warp_specialized[
         MMA_M == 256 or config.cta_group == 1
     ) else c_tma_tile_shape_mma128
 
+    # c_swizzle is set to 32B mode when swapAB is enabled so we need to adjust the tile shape
+    # with 32B swizzle mode, there should always be 16 bfloat16 elements on the contiguous dim.
+    alias c_tma_tile_shape_1 = c_tma_tile_shape[1] // 4 if (
+        config.cta_group == 1 and MMA_M == 64
+    ) else c_tma_tile_shape[1] // 8
     var c_tma_op = create_tma_tile[
         c_tma_tile_shape if not config.AB_swapped else Index(
-            c_tma_tile_shape[0], c_tma_tile_shape[1] // 8
+            c_tma_tile_shape[0], c_tma_tile_shape_1
         ),
         swizzle_mode = config.c_swizzle,
     ](ctx, c_device)
