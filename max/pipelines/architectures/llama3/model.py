@@ -407,7 +407,9 @@ class LlamaModelBase(PipelineModel[TextContext], KVCacheMixin):
         logger.info(f"Building graph took {after_build - before:.6f} seconds")
 
         before_compile = time.perf_counter()
+        print("loading model")
         model = session.load(graph, weights_registry=self.state_dict)
+        print("done loading model")
         after = time.perf_counter()
 
         logger.info(
